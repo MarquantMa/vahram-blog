@@ -1,0 +1,27 @@
+{
+  "name": "vahram-blog",
+  "version": "1.0.0",
+  "description": "Vahram 的 blog - Apple Newsroom style bilingual blog hosted on Cloudflare Pages",
+  "main": "build.js",
+  "scripts": {
+    "build": "node build.js",
+    "dev": "node dev-server.js",
+    "test": "node test-build.js",
+    "new-post": "node scripts/new-post.js"
+  },
+  "keywords": [
+    "blog",
+    "apple-newsroom",
+    "bilingual",
+    "cloudflare-pages",
+    "markdown"
+  ],
+  "author": "Vahram",
+  "license": "MIT",
+  "type": "commonjs",
+  "dependencies": {
+    "gray-matter": "^4.0.3",
+    "highlight.js": "^11.12.0",
+    "marked": "^18.1.3"
+  }
+}
