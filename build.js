@@ -49,13 +49,21 @@ const marked = new Marked({
       return `<a href="${href}"${targetAttr}${titleAttr}>${text}</a>`;
     },
     image({ href, title, text }) {
+      let resolvedHref = href;
+      if (href && !href.startsWith('http://') && !href.startsWith('https://') && !href.startsWith('data:')) {
+        // If image refers to images/ (e.g. images/foo.png or ./images/foo.png or ../images/foo.png), normalize to /images/foo.png
+        if (/^(\.\/|\.\.\/)?images\//i.test(href)) {
+          resolvedHref = '/' + href.replace(/^(\.\/|\.\.\/)?/i, '');
+        }
+      }
+
       const titleAttr = title ? ` title="${escapeHtml(title)}"` : '';
       const altAttr = text ? ` alt="${escapeHtml(text)}"` : '';
       const captionText = title || text;
       const captionHtml = captionText ? `<figcaption class="figure-caption">${escapeHtml(captionText)}</figcaption>` : '';
       return `
 <figure class="article-inline-figure">
-  <img src="${href}"${altAttr}${titleAttr} loading="lazy">
+  <img src="${resolvedHref}"${altAttr}${titleAttr} loading="lazy">
   ${captionHtml}
 </figure>`;
     }
@@ -311,7 +319,15 @@ function loadAllPosts() {
     const explicitDeckEn = fmEn.summary || '';
     const explicitDeckZh = fmZh.summary_zh || '';
 
-    const coverImage = common.coverImage ? String(common.coverImage).trim() : '';
+    let coverImage = common.coverImage ? String(common.coverImage).trim() : '';
+    if (coverImage && !coverImage.startsWith('http://') && !coverImage.startsWith('https://') && !coverImage.startsWith('data:')) {
+      if (/^(\.\/|\.\.\/)?images\//i.test(coverImage)) {
+        coverImage = '/' + coverImage.replace(/^(\.\/|\.\.\/)?/i, '');
+      } else if (!coverImage.startsWith('/')) {
+        const cleanName = coverImage.replace(/^\.\//, '');
+        coverImage = `/posts/${entry.slug}/${cleanName}`;
+      }
+    }
 
     const htmlEn = marked.parse(entry.rawEn || '');
     const htmlZh = marked.parse(entry.rawZh || '');
@@ -590,29 +606,64 @@ function copyStaticAssets() {
   fs.mkdirSync(jsDestDir, { recursive: true });
   fs.copyFileSync(path.join(CONFIG.scriptsDir, 'app.js'), path.join(jsDestDir, 'app.js'));
 
+  const imagesDestDir = path.join(CONFIG.distDir, 'images');
+  fs.mkdirSync(imagesDestDir, { recursive: true });
+
   if (fs.existsSync(CONFIG.publicDir)) {
     copyRecursive(CONFIG.publicDir, CONFIG.distDir);
   }
 
   if (fs.existsSync(CONFIG.sourceDir)) {
     const mediaFiles = getFilesRecursively(CONFIG.sourceDir);
+    const postSlugs = [];
+    try {
+      const posts = loadAllPosts();
+      postSlugs.push(...posts.map(p => p.slug));
+    } catch (e) {
+      // ignore
+    }
+
     mediaFiles.forEach(({ fullPath, relPath, name }) => {
       if (/\.(md|markdown)$/i.test(name) || name === 'TEMPLATE.md') return;
       const cleanRelPath = relPath.replace(/^\d{4}-\d{2}-\d{2}-/, '');
 
+      // 1. Copy to dist/posts/<relPath>
       const destPostPath = path.join(CONFIG.distDir, 'posts', relPath);
       fs.mkdirSync(path.dirname(destPostPath), { recursive: true });
       fs.copyFileSync(fullPath, destPostPath);
 
+      // 2. Copy to dist/posts/<cleanRelPath>
       if (cleanRelPath !== relPath) {
         const destCleanPostPath = path.join(CONFIG.distDir, 'posts', cleanRelPath);
         fs.mkdirSync(path.dirname(destCleanPostPath), { recursive: true });
         fs.copyFileSync(fullPath, destCleanPostPath);
       }
 
+      // 3. Copy to root dist/<cleanRelPath>
       const destRootPath = path.join(CONFIG.distDir, cleanRelPath);
       fs.mkdirSync(path.dirname(destRootPath), { recursive: true });
       fs.copyFileSync(fullPath, destRootPath);
+
+      // 4. If image is inside images/ (e.g. content/posts/images/pic.png), ensure dist/images/pic.png exists
+      if (/^images[\\/]/i.test(relPath)) {
+        const imgSubPath = relPath.replace(/^images[\\/]/i, '');
+        const targetImgPath = path.join(imagesDestDir, imgSubPath);
+        fs.mkdirSync(path.dirname(targetImgPath), { recursive: true });
+        fs.copyFileSync(fullPath, targetImgPath);
+      }
+
+      // 5. If image was placed directly at content/posts/ (e.g. content/posts/pic.png)
+      // copy to dist/images/pic.png and to every post's folder so relative references ./pic.png work
+      if (!relPath.includes('/') && !relPath.includes('\\')) {
+        const rootImgTarget = path.join(imagesDestDir, relPath);
+        fs.copyFileSync(fullPath, rootImgTarget);
+
+        postSlugs.forEach(slug => {
+          const postImgTarget = path.join(CONFIG.distDir, 'posts', slug, relPath);
+          fs.mkdirSync(path.dirname(postImgTarget), { recursive: true });
+          fs.copyFileSync(fullPath, postImgTarget);
+        });
+      }
     });
   }
 }

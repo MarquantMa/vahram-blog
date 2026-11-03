@@ -35,6 +35,38 @@ English content here...
 
 ---
 
+## 🖼️ 如何上传带有图片的文章？
+
+完全支持 Markdown 自带本地图片，支持以下 3 种极简方式：
+
+### 方式 1：集中图片目录（推荐，最省心）
+把图片放进 `content/posts/images/` 目录（例如 `content/posts/images/chip.png`），在 Markdown 里直接写：
+```markdown
+![芯片架构图](images/chip.png)
+```
+或者指定封面图：
+```markdown
+coverImage: "images/chip.png"
+```
+
+### 方式 2：每篇文章独立文件夹（适合包含多张图的长文）
+在 `content/posts/` 下新建一个文章专属文件夹：
+```text
+content/posts/my-new-post/
+├── index.md        # 文章内容
+├── diagram.png     # 配图 1
+└── photo.jpg       # 配图 2
+```
+在 `index.md` 里直接引用同级图片：
+```markdown
+![流程图](./diagram.png)
+```
+
+### 方式 3：在 GitHub 网页编辑时直接拖拽/粘贴图片
+在 GitHub 网页端新建或编辑 `.md` 文件时，直接把本地图片**拖拽进编辑框**或按 `Cmd + V` 粘贴，GitHub 会自动生成并托管该图片链接（如 `![image](https://...)`），开箱即用！
+
+---
+
 ## 本地命令行发文（一行命令全自动发布）
 
 项目已为您配置好了 **Git 自动联动钩子** 和 **一键发布脚本**，您完全不需要去网页上点来点去：
