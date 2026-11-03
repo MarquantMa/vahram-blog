@@ -34,9 +34,12 @@ jobs:
       - name: Build static site
         run: npm run build
 
-      - name: Publish to Cloudflare Pages
+      - name: Check Cloudflare credentials and Deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        if: ${{ env.CLOUDFLARE_API_TOKEN != '' }}
         uses: cloudflare/pages-action@v1
-        if: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -45,8 +48,10 @@ jobs:
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Notice on Cloudflare Deployment Configuration
-        if: ${{ secrets.CLOUDFLARE_API_TOKEN == '' }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        if: ${{ env.CLOUDFLARE_API_TOKEN == '' }}
         run: |
-          echo "ℹ️ CLOUDFLARE_API_TOKEN is not configured in GitHub Repository Secrets."
-          echo "➡️ If you connected GitHub directly via the Cloudflare Pages Dashboard (recommended), Cloudflare deploys automatically on push."
-          echo "➡️ If you wish to use GitHub Actions to deploy, configure CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID in Repository Settings -> Secrets."
+          echo "ℹ️ Note: Direct GitHub Actions deployment requires CLOUDFLARE_API_TOKEN."
+          echo "👉 Recommended: Connect your GitHub repo directly inside Cloudflare Pages Dashboard (Workers & Pages -> vahram -> Connect Git)."
+          echo "👉 Once connected in Cloudflare Dashboard, Cloudflare automatically builds and deploys on every push without any secret configuration."
