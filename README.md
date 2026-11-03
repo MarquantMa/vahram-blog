@@ -35,6 +35,29 @@ English content here...
 
 ---
 
+## 本地命令行发文（一行命令全自动发布）
+
+项目已为您配置好了 **Git 自动联动钩子** 和 **一键发布脚本**，您完全不需要去网页上点来点去：
+
+### 方式 A：纯 Git 习惯（您只要像平时一样 `git push`）
+在项目目录下：
+```bash
+git add -A
+git commit -m "发布新文章"
+git push
+```
+> ⚡ **全自动发生**：Git 内置的 `pre-push` 钩子会在推送代码的同时，**自动完成静态编译并直推 Cloudflare Pages**，全球 CDN 3 秒内同步更新！
+
+---
+
+### 方式 B：超省事一条命令搞定（自动编译 + 部署 + 提交 + 推送）
+```bash
+npm run deploy "发布我的新文章"
+```
+> 一键全自动完成：静态编译 ➔ 部署到 `vahram.pages.dev` ➔ `git commit` ➔ `git push` 到 GitHub。
+
+---
+
 ## 本地运行与构建
 
 ```bash
