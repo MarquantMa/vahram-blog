@@ -1,8 +1,8 @@
 ---
 title: "SI-founded-company"
 title_zh: "让SI创建公司"
-date: "2026-11-03"
-category: "Tech" # Personal | Tech | Entrepreneurship
+date: "2026-10-19"
+category: "Entrepreneurship" # Personal | Tech | Entrepreneurship
 ---
 
 <!-- lang:en -->
