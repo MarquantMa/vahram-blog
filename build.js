@@ -62,6 +62,17 @@ const marked = new Marked({
       const targetAttr = isExternal ? ' target="_blank" rel="noopener noreferrer"' : '';
       const titleAttr = title ? ` title="${escapeHtml(title)}"` : '';
       return `<a href="${href}"${targetAttr}${titleAttr}>${text}</a>`;
+    },
+    image({ href, title, text }) {
+      const titleAttr = title ? ` title="${escapeHtml(title)}"` : '';
+      const altAttr = text ? ` alt="${escapeHtml(text)}"` : '';
+      const captionText = title || text;
+      const captionHtml = captionText ? `<figcaption class="figure-caption">${escapeHtml(captionText)}</figcaption>` : '';
+      return `
+<figure class="article-inline-figure">
+  <img src="${href}"${altAttr}${titleAttr} loading="lazy">
+  ${captionHtml}
+</figure>`;
     }
   }
 });
@@ -79,26 +90,71 @@ function escapeHtml(str) {
 
 // Split bilingual content in a single markdown file
 function splitBilingualMarkdown(rawContent) {
-  const enRegex = /<!--\s*(?:lang:)?en(?:glish)?\s*-->([\s\S]*?)(?=<!--\s*(?:lang:)?zh(?:\b|[-_a-zA-Z0-9]*)\s*-->|<!--\s*(?:lang:)?chinese\s*-->|$)/i;
-  const zhRegex = /<!--\s*(?:lang:)?zh(?:\b|[-_a-zA-Z0-9]*)\s*-->([\s\S]*?)(?=<!--\s*(?:lang:)?en(?:glish)?\s*-->|$)|<!--\s*(?:lang:)?chinese\s*-->([\s\S]*?)(?=<!--\s*(?:lang:)?en(?:glish)?\s*-->|$)/i;
+  // 1. Check HTML section/div tags
+  const enTagMatch = rawContent.match(/<(?:section|div)[^>]*\blang=["'](?:en|en-US|en-GB)["'][^>]*>([\s\S]*?)<\/(?:section|div)>/i);
+  const zhTagMatch = rawContent.match(/<(?:section|div)[^>]*\blang=["'](?:zh|zh-CN|zh-Hans|zh-TW)["'][^>]*>([\s\S]*?)<\/(?:section|div)>/i);
+  if (enTagMatch || zhTagMatch) {
+    let rawEn = enTagMatch ? enTagMatch[1].trim() : '';
+    let rawZh = zhTagMatch ? zhTagMatch[1].trim() : '';
+    if (!rawEn && rawZh) rawEn = `> *English translation is currently in preparation. Displaying original Chinese text.*\n\n` + rawZh;
+    if (rawEn && !rawZh) rawZh = `> *本文暂未提供中文翻译，已自动展示英文原文。*\n\n` + rawEn;
+    return { rawEn, rawZh };
+  }
 
-  const enMatch = rawContent.match(enRegex);
-  const zhMatch = rawContent.match(zhRegex);
+  // 2. Delimiter markers regexes (supports HTML comments, markdown headings, dividers)
+  const enDelim = /(?:<!--\s*(?:lang\s*:\s*)?(?:en|english)\s*-->|^#{1,3}\s+(?:\[?(?:en|english)\]?|English\s*(?:Version)?|英文版?)\s*$|^(?:===|---|\[)\s*(?:en|english)\s*(?:===|---|\])\s*$)/im;
+  const zhDelim = /(?:<!--\s*(?:lang\s*:\s*)?(?:zh|chinese|cn|zh-cn|zh-hans|中文)\s*-->|^#{1,3}\s+(?:\[?(?:zh|cn|chinese)\]?|Chinese\s*(?:Version)?|中文版?|简体中文)\s*$|^(?:===|---|\[)\s*(?:zh|chinese|cn|中文)\s*(?:===|---|\])\s*$)/im;
 
-  let rawEn = enMatch ? enMatch[1].trim() : '';
-  let rawZh = zhMatch ? (zhMatch[1] || zhMatch[2] || '').trim() : '';
+  const enPos = rawContent.search(enDelim);
+  const zhPos = rawContent.search(zhDelim);
 
-  // If no comment delimiters are found, treat entire content as English, fallback for Chinese with notice
-  if (!rawEn && !rawZh) {
-    rawEn = rawContent.trim();
+  let rawEn = '';
+  let rawZh = '';
+
+  if (enPos !== -1 && zhPos !== -1) {
+    if (enPos < zhPos) {
+      // EN first, then ZH
+      const afterEn = rawContent.slice(enPos).replace(enDelim, '');
+      const zhIndexInAfterEn = afterEn.search(zhDelim);
+      rawEn = afterEn.slice(0, zhIndexInAfterEn).trim();
+      rawZh = afterEn.slice(zhIndexInAfterEn).replace(zhDelim, '').trim();
+    } else {
+      // ZH first, then EN
+      const afterZh = rawContent.slice(zhPos).replace(zhDelim, '');
+      const enIndexInAfterZh = afterZh.search(enDelim);
+      rawZh = afterZh.slice(0, enIndexInAfterZh).trim();
+      rawEn = afterZh.slice(enIndexInAfterZh).replace(enDelim, '').trim();
+    }
+  } else if (enPos !== -1) {
+    rawEn = rawContent.slice(enPos).replace(enDelim, '').trim();
     rawZh = `> *本文暂未提供中文翻译，已自动展示英文原文。*\n\n` + rawEn;
-  } else if (!rawEn && rawZh) {
+  } else if (zhPos !== -1) {
+    rawZh = rawContent.slice(zhPos).replace(zhDelim, '').trim();
     rawEn = `> *English translation is currently in preparation. Displaying original Chinese text.*\n\n` + rawZh;
-  } else if (rawEn && !rawZh) {
+  } else {
+    // No comment delimiters are found, treat entire content as English, fallback for Chinese with notice
+    rawEn = rawContent.trim();
     rawZh = `> *本文暂未提供中文翻译，已自动展示英文原文。*\n\n` + rawEn;
   }
 
   return { rawEn, rawZh };
+}
+
+// Recursively find all files in a directory
+function getFilesRecursively(dir, baseDir = dir) {
+  let results = [];
+  if (!fs.existsSync(dir)) return results;
+  const list = fs.readdirSync(dir, { withFileTypes: true });
+  for (const entry of list) {
+    const fullPath = path.join(dir, entry.name);
+    const relPath = path.relative(baseDir, fullPath);
+    if (entry.isDirectory()) {
+      results = results.concat(getFilesRecursively(fullPath, baseDir));
+    } else {
+      results.push({ fullPath, relPath, name: entry.name });
+    }
+  }
+  return results;
 }
 
 // Parse posts from content/posts/
@@ -107,45 +163,106 @@ function loadAllPosts() {
     return [];
   }
 
-  const files = fs.readdirSync(CONFIG.sourceDir);
+  const allFiles = getFilesRecursively(CONFIG.sourceDir);
   const postsMap = new Map();
 
-  files.forEach((file) => {
-    if (!file.endsWith('.md') || file === 'TEMPLATE.md') return;
+  allFiles.forEach(({ fullPath, relPath, name }) => {
+    if (!/\.(md|markdown)$/i.test(name) || name === 'TEMPLATE.md') return;
 
-    const fullPath = path.join(CONFIG.sourceDir, file);
-    const fileContent = fs.readFileSync(fullPath, 'utf8');
-    const { data: frontmatter, content: rawContent } = matter(fileContent);
-
-    // Slug generation from filename e.g. 2026-11-03-my-post.md -> my-post
-    let baseSlug = file.replace(/\.md$/, '');
-    baseSlug = baseSlug.replace(/^\d{4}-\d{2}-\d{2}-/, '');
-
-    // Check if paired format e.g. my-post.en.md or my-post.zh.md
-    const isPairedEn = /\.en$/.test(baseSlug);
-    const isPairedZh = /\.zh$/.test(baseSlug);
-    if (isPairedEn || isPairedZh) {
-      baseSlug = baseSlug.replace(/\.(en|zh)$/, '');
+    let fileContent = '';
+    try {
+      fileContent = fs.readFileSync(fullPath, 'utf8');
+    } catch (err) {
+      console.warn(`Warning: Could not read ${fullPath}:`, err.message);
+      return;
     }
 
-    if (!postsMap.has(baseSlug)) {
-      postsMap.set(baseSlug, {
-        slug: baseSlug,
-        frontmatter: {},
+    const { data: frontmatter, content: rawContent } = matter(fileContent);
+
+    // Slug generation from filename and path
+    // Normalise separators
+    const normalisedRel = relPath.replace(/\\/g, '/');
+    const pathParts = normalisedRel.split('/');
+    let filenameBase = pathParts[pathParts.length - 1].replace(/\.(md|markdown)$/i, '');
+
+    // Strip leading date YYYY-MM-DD-
+    let cleanSlug = filenameBase.replace(/^\d{4}-\d{2}-\d{2}-/, '');
+
+    // Check if paired format e.g. my-post.en.md, my-post-zh.md, my-post_cn.md
+    const zhSuffixRegex = /(?:[\.\-_](?:zh|cn|zh-cn|zh-hans|zh-tw)|_cn|-cn|\.cn|\.zh|-zh|_zh)$/i;
+    const enSuffixRegex = /(?:[\.\-_](?:en|english)|_en|-en|\.en)$/i;
+
+    let isPairedEn = false;
+    let isPairedZh = false;
+
+    if (zhSuffixRegex.test(cleanSlug)) {
+      isPairedZh = true;
+      cleanSlug = cleanSlug.replace(zhSuffixRegex, '');
+    } else if (enSuffixRegex.test(cleanSlug)) {
+      isPairedEn = true;
+      cleanSlug = cleanSlug.replace(enSuffixRegex, '');
+    } else if (pathParts.length > 1) {
+      // Check parent directory e.g. en/my-post.md or zh/my-post.md
+      const parentDir = pathParts[pathParts.length - 2].toLowerCase();
+      if (['zh', 'cn', 'zh-cn', 'chinese'].includes(parentDir)) {
+        isPairedZh = true;
+      } else if (['en', 'english'].includes(parentDir)) {
+        isPairedEn = true;
+      } else if (cleanSlug === 'index' || cleanSlug === 'post') {
+        // Nested folder post: content/posts/my-cool-post/index.md
+        cleanSlug = pathParts[pathParts.length - 2].replace(/^\d{4}-\d{2}-\d{2}-/, '');
+      }
+    }
+
+    if (!postsMap.has(cleanSlug)) {
+      postsMap.set(cleanSlug, {
+        slug: cleanSlug,
+        commonFm: {},
+        fmEn: {},
+        fmZh: {},
         rawEn: '',
         rawZh: ''
       });
     }
 
-    const postObj = postsMap.get(baseSlug);
-    postObj.frontmatter = { ...postObj.frontmatter, ...frontmatter };
+    const postObj = postsMap.get(cleanSlug);
 
-    if (isPairedEn) {
-      postObj.rawEn = rawContent.trim();
-    } else if (isPairedZh) {
+    // Common frontmatter fields (shared between paired files)
+    ['date', 'featured', 'coverImage', 'author', 'tags'].forEach((key) => {
+      if (frontmatter[key] !== undefined && postObj.commonFm[key] === undefined) {
+        postObj.commonFm[key] = frontmatter[key];
+      }
+    });
+
+    if (isPairedZh) {
+      postObj.fmZh.title_zh = frontmatter.title_zh || frontmatter.title;
+      postObj.fmZh.summary_zh = frontmatter.summary_zh || frontmatter.summary || frontmatter.description_zh || frontmatter.description;
+      postObj.fmZh.category_zh = frontmatter.category_zh || frontmatter.category;
+      postObj.fmZh.dateline_zh = frontmatter.dateline_zh || frontmatter.dateline;
+      postObj.fmZh.readTime_zh = frontmatter.readTime_zh || frontmatter.readTime;
       postObj.rawZh = rawContent.trim();
+    } else if (isPairedEn) {
+      postObj.fmEn.title = frontmatter.title;
+      postObj.fmEn.summary = frontmatter.summary || frontmatter.description;
+      postObj.fmEn.category = frontmatter.category;
+      postObj.fmEn.dateline = frontmatter.dateline;
+      postObj.fmEn.readTime = frontmatter.readTime;
+      postObj.rawEn = rawContent.trim();
     } else {
       // Single file with delimiters
+      if (frontmatter.title) postObj.fmEn.title = frontmatter.title;
+      if (frontmatter.title_zh) postObj.fmZh.title_zh = frontmatter.title_zh;
+      if (frontmatter.summary) postObj.fmEn.summary = frontmatter.summary;
+      if (frontmatter.summary_zh) postObj.fmZh.summary_zh = frontmatter.summary_zh;
+      if (frontmatter.description && !postObj.fmEn.summary) postObj.fmEn.summary = frontmatter.description;
+      if (frontmatter.description_zh && !postObj.fmZh.summary_zh) postObj.fmZh.summary_zh = frontmatter.description_zh;
+      if (frontmatter.category) postObj.fmEn.category = frontmatter.category;
+      if (frontmatter.category_zh) postObj.fmZh.category_zh = frontmatter.category_zh;
+      if (frontmatter.dateline) postObj.fmEn.dateline = frontmatter.dateline;
+      if (frontmatter.dateline_zh) postObj.fmZh.dateline_zh = frontmatter.dateline_zh;
+      if (frontmatter.readTime) postObj.fmEn.readTime = frontmatter.readTime;
+      if (frontmatter.readTime_zh) postObj.fmZh.readTime_zh = frontmatter.readTime_zh;
+
       const split = splitBilingualMarkdown(rawContent);
       postObj.rawEn = split.rawEn;
       postObj.rawZh = split.rawZh;
@@ -154,25 +271,28 @@ function loadAllPosts() {
 
   const posts = [];
   postsMap.forEach((entry) => {
-    const fm = entry.frontmatter;
-    const title = fm.title || entry.slug;
-    const title_zh = fm.title_zh || title;
-    const date = fm.date ? String(fm.date).substring(0, 10) : new Date().toISOString().substring(0, 10);
-    const category = fm.category || 'General';
-    const category_zh = fm.category_zh || category;
-    const summary = fm.summary || fm.description || '';
-    const summary_zh = fm.summary_zh || fm.description_zh || summary;
-    const dateline = fm.dateline || `CUPERTINO, CALIFORNIA — ${date}`;
-    const dateline_zh = fm.dateline_zh || `加利福尼亚州库比蒂诺 — ${date}`;
-    const readTime = fm.readTime || '4 min read';
-    const readTime_zh = fm.readTime_zh || '4 分钟阅读';
-    const coverImage = fm.coverImage || 'https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?auto=format&fit=crop&w=1600&q=80';
-    const featured = Boolean(fm.featured);
-    const tags = Array.isArray(fm.tags) ? fm.tags : [];
+    const common = entry.commonFm;
+    const fmEn = entry.fmEn;
+    const fmZh = entry.fmZh;
+
+    const title = fmEn.title || fmZh.title_zh || entry.slug;
+    const title_zh = fmZh.title_zh || fmEn.title || title;
+    const date = common.date ? String(common.date).substring(0, 10) : new Date().toISOString().substring(0, 10);
+    const category = fmEn.category || fmZh.category_zh || 'General';
+    const category_zh = fmZh.category_zh || fmEn.category || category;
+    const summary = fmEn.summary || fmZh.summary_zh || '';
+    const summary_zh = fmZh.summary_zh || fmEn.summary || summary;
+    const dateline = fmEn.dateline || fmZh.dateline_zh || `CUPERTINO, CALIFORNIA — ${date}`;
+    const dateline_zh = fmZh.dateline_zh || fmEn.dateline || `加利福尼亚州库比蒂诺 — ${date}`;
+    const readTime = fmEn.readTime || fmZh.readTime_zh || '4 min read';
+    const readTime_zh = fmZh.readTime_zh || fmEn.readTime || '4 分钟阅读';
+    const coverImage = common.coverImage || 'https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?auto=format&fit=crop&w=1600&q=80';
+    const featured = Boolean(common.featured);
+    const tags = Array.isArray(common.tags) ? common.tags : [];
 
     // Pre-render HTML for both languages
-    const htmlEn = marked.parse(entry.rawEn);
-    const htmlZh = marked.parse(entry.rawZh);
+    const htmlEn = marked.parse(entry.rawEn || '');
+    const htmlZh = marked.parse(entry.rawZh || '');
 
     posts.push({
       slug: entry.slug,
@@ -798,6 +918,31 @@ function copyStaticAssets() {
   // Public files (favicon, _headers, _redirects, etc.)
   if (fs.existsSync(CONFIG.publicDir)) {
     copyRecursive(CONFIG.publicDir, CONFIG.distDir);
+  }
+
+  // Copy non-markdown media assets from content/posts/ to dist/posts/ and dist/
+  if (fs.existsSync(CONFIG.sourceDir)) {
+    const mediaFiles = getFilesRecursively(CONFIG.sourceDir);
+    mediaFiles.forEach(({ fullPath, relPath, name }) => {
+      if (/\.(md|markdown)$/i.test(name) || name === 'TEMPLATE.md') return;
+      const cleanRelPath = relPath.replace(/^\d{4}-\d{2}-\d{2}-/, '');
+
+      // Copy to dist/posts/<relPath>
+      const destPostPath = path.join(CONFIG.distDir, 'posts', relPath);
+      fs.mkdirSync(path.dirname(destPostPath), { recursive: true });
+      fs.copyFileSync(fullPath, destPostPath);
+
+      // Copy to dist/posts/<cleanRelPath> (matches post slug directory)
+      if (cleanRelPath !== relPath) {
+        const destCleanPostPath = path.join(CONFIG.distDir, 'posts', cleanRelPath);
+        fs.mkdirSync(path.dirname(destCleanPostPath), { recursive: true });
+        fs.copyFileSync(fullPath, destCleanPostPath);
+      }
+
+      const destRootPath = path.join(CONFIG.distDir, cleanRelPath);
+      fs.mkdirSync(path.dirname(destRootPath), { recursive: true });
+      fs.copyFileSync(fullPath, destRootPath);
+    });
   }
 }
 

@@ -822,6 +822,84 @@ button {
   margin: 3em 0;
 }
 
+/* Apple Newsroom Inline Figures & Images */
+.article-body img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-lg);
+  margin: 1.5em auto;
+  display: block;
+}
+
+.article-inline-figure {
+  margin: 2.4em 0;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--border-light);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.article-inline-figure img {
+  width: 100%;
+  max-height: 520px;
+  object-fit: cover;
+  margin: 0;
+  border-radius: 0;
+}
+
+.article-inline-figure .figure-caption {
+  padding: 10px 18px;
+  font-size: 0.82rem;
+  color: var(--text-tertiary);
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border-subtle);
+  text-align: center;
+}
+
+/* Apple Newsroom Styled Tables */
+.article-body table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin: 2.2em 0;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px solid var(--border-light);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-sm);
+  font-size: 0.95rem;
+}
+
+.article-body thead {
+  background: var(--bg-pill);
+}
+
+.article-body th {
+  padding: 14px 18px;
+  font-weight: 600;
+  text-align: left;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-light);
+  font-size: 0.88rem;
+  letter-spacing: -0.01em;
+}
+
+.article-body td {
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 0.92rem;
+}
+
+.article-body tr:last-child td {
+  border-bottom: none;
+}
+
+.article-body tbody tr:hover td {
+  background: var(--bg-pill);
+}
+
 /* macOS Styled Code Blocks */
 .code-block {
   margin: 2em 0;

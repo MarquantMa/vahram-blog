@@ -28,18 +28,25 @@ jobs:
       - name: Install dependencies
         run: npm ci || npm install
 
+      - name: Run verification test suite
+        run: npm test
+
       - name: Build static site
         run: npm run build
 
       - name: Publish to Cloudflare Pages
         uses: cloudflare/pages-action@v1
-        if: ${{ env.CLOUDFLARE_API_TOKEN != '' }}
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        if: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           projectName: vahram
           directory: dist
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Notice on Cloudflare Deployment Configuration
+        if: ${{ secrets.CLOUDFLARE_API_TOKEN == '' }}
+        run: |
+          echo "ℹ️ CLOUDFLARE_API_TOKEN is not configured in GitHub Repository Secrets."
+          echo "➡️ If you connected GitHub directly via the Cloudflare Pages Dashboard (recommended), Cloudflare deploys automatically on push."
+          echo "➡️ If you wish to use GitHub Actions to deploy, configure CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID in Repository Settings -> Secrets."

@@ -99,6 +99,14 @@
   }
 
   function switchLanguage(lang) {
+    if (lang === currentLang) return;
+
+    // Preserve proportional reading scroll position across language length differences
+    const docEl = document.documentElement;
+    const oldScrollMax = docEl.scrollHeight - window.innerHeight;
+    const scrollRatio = oldScrollMax > 0 ? (window.scrollY / oldScrollMax) : 0;
+    const isScrolledDown = window.scrollY > 120;
+
     currentLang = lang;
     localStorage.setItem('vahram_lang', lang);
 
@@ -108,6 +116,17 @@
     window.history.replaceState({}, '', url.toString());
 
     applyLanguage(lang, true);
+
+    // If reader was scrolled into article content, restore equivalent reading position
+    if (isScrolledDown) {
+      requestAnimationFrame(() => {
+        const newScrollMax = docEl.scrollHeight - window.innerHeight;
+        if (newScrollMax > 0) {
+          const targetY = scrollRatio * newScrollMax;
+          window.scrollTo({ top: targetY, behavior: 'instant' });
+        }
+      });
+    }
   }
 
   function applyLanguage(lang, animate) {
@@ -159,8 +178,18 @@
         const titleText = lang === 'zh' ? postTitleEl.getAttribute('data-zh') : postTitleEl.getAttribute('data-en');
         if (titleText) {
           postTitleEl.textContent = titleText;
-          document.title = `${titleText} — Vahram's Blog`;
+          document.title = `${titleText} — ${lang === 'zh' ? 'Vahram 的 blog' : "Vahram's Blog"}`;
         }
+      }
+    } else {
+      // Home, About, 404 Pages title update
+      const path = window.location.pathname;
+      if (path.includes('/about')) {
+        document.title = lang === 'zh' ? '关于 Vahram — Vahram 的 blog' : "About Vahram — Vahram's Blog";
+      } else if (path.includes('404')) {
+        document.title = lang === 'zh' ? '页面未找到 — Vahram 的 blog' : "Page Not Found — Vahram's Blog";
+      } else {
+        document.title = lang === 'zh' ? 'Vahram 的 blog — Apple Newsroom' : "Vahram's Blog — Apple Newsroom";
       }
     }
 
