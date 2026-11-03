@@ -1,8 +1,8 @@
 ---
-title: "English Title"
-title_zh: "中文标题"
-date: "2026-11-03"
-category: "Tech" # Personal | Tech | Entrepreneurship
+title: "Social Network"
+title_zh: "社交网络"
+date: "2026-10-31"
+category: "Personal" # Personal | Tech | Entrepreneurship
 ---
 
 <!-- lang:en -->
