@@ -38,4 +38,5 @@ jobs:
 
       - name: Deploy to Cloudflare Pages (vahram.pages.dev)
         run: |
+          npx wrangler pages project create vahram --production-branch=main || true
           npx wrangler pages deploy dist --project-name=vahram --branch=main
