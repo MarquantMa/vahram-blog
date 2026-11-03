@@ -38,7 +38,4 @@ jobs:
 
       - name: Deploy to Cloudflare Pages (vahram.pages.dev)
         run: |
-          # Recreate vahram project so it claims the released vahram.pages.dev domain
-          npx wrangler pages project delete vahram --yes || true
-          npx wrangler pages project create vahram --production-branch=main
           npx wrangler pages deploy dist --project-name=vahram --branch=main
