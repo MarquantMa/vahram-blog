@@ -1,6 +1,7 @@
 /**
- * Vahram's Blog - Automated Test Suite
- * Verifies build pipeline, bilingual splitting, Apple Newsroom components, and Cloudflare Pages compatibility.
+ * Vahram 的 blog — Automated Test Suite
+ * Verifies chronological ordering, exact 3 filters (Personal, Tech, Entrepreneurship),
+ * one-click EN/ZH bilingual switching, zero UI clutter, and Cloudflare Pages output.
  */
 
 const assert = require('assert');
@@ -8,7 +9,7 @@ const fs = require('fs');
 const path = require('path');
 const { build, loadAllPosts } = require('./build');
 
-console.log('🧪 Starting test suite for Vahram\'s Blog...\n');
+console.log('🧪 Starting test suite for Vahram 的 blog...\n');
 
 let totalTests = 0;
 let passedTests = 0;
@@ -26,21 +27,34 @@ function it(description, fn) {
   }
 }
 
-// 1. Post Loading & Frontmatter Tests
-it('should load all sample blog posts from content/posts/', () => {
+it('should load published posts and exclude removed AI sample articles', () => {
   const posts = loadAllPosts();
-  assert.ok(posts.length >= 4, `Expected at least 4 posts, found ${posts.length}`);
-  
+  assert.ok(posts.length >= 1, `Expected at least 1 post, found ${posts.length}`);
+
+  const slugs = posts.map((p) => p.slug);
+  assert.ok(slugs.includes('openais-700-math-essays'), 'Must include openais-700-math-essays');
+  assert.ok(!slugs.includes('introducing-vahram-blog'), 'Old AI post must be removed');
+  assert.ok(!slugs.includes('designing-for-ambient-intelligence'), 'Old AI post must be removed');
+  assert.ok(!slugs.includes('the-craft-of-software-engineering'), 'Old AI post must be removed');
+  assert.ok(!slugs.includes('typography-and-digital-spaces'), 'Old AI post must be removed');
+
   posts.forEach((post) => {
     assert.ok(post.slug, 'Post must have a slug');
     assert.ok(post.title, `Post ${post.slug} must have an English title`);
     assert.ok(post.title_zh, `Post ${post.slug} must have a Chinese title`);
     assert.ok(post.date, `Post ${post.slug} must have a date`);
     assert.ok(post.category, `Post ${post.slug} must have a category`);
-    assert.ok(post.category_zh, `Post ${post.slug} must have a Chinese category`);
-    assert.ok(post.summary, `Post ${post.slug} must have an English summary`);
-    assert.ok(post.summary_zh, `Post ${post.slug} must have a Chinese summary`);
   });
+});
+
+it('should sort posts strictly in reverse chronological order', () => {
+  const posts = loadAllPosts();
+  for (let i = 1; i < posts.length; i++) {
+    assert.ok(
+      new Date(posts[i - 1].date) >= new Date(posts[i].date),
+      `Posts out of chronological order: ${posts[i - 1].date} before ${posts[i].date}`
+    );
+  }
 });
 
 it('should correctly parse bilingual content for every post', () => {
@@ -51,26 +65,35 @@ it('should correctly parse bilingual content for every post', () => {
   });
 });
 
-// 2. Build Pipeline Tests
-it('should execute build() without errors', () => {
+it('should execute clean build() without errors and remove stale artifacts', () => {
   build();
   assert.ok(fs.existsSync(path.join(__dirname, 'dist')));
+  assert.ok(!fs.existsSync(path.join(__dirname, 'dist/about')), 'About page must not exist');
+  assert.ok(!fs.existsSync(path.join(__dirname, 'dist/api')), 'Search API bloat must not exist');
 });
 
-it('should generate dist/index.html with Apple Newsroom structure', () => {
+it('should generate dist/index.html with ONLY the 3 allowed filters and zero clutter', () => {
   const indexPath = path.join(__dirname, 'dist/index.html');
   assert.ok(fs.existsSync(indexPath));
   const html = fs.readFileSync(indexPath, 'utf8');
 
-  assert.ok(html.includes('Vahram'), 'Must include brand Vahram');
-  assert.ok(html.includes('site-header'), 'Must include Apple header');
+  assert.ok(html.includes('Vahram 的 blog'), 'Must include brand Vahram 的 blog');
   assert.ok(html.includes('lang-switcher-pill'), 'Must include language switcher pill');
-  assert.ok(html.includes('hero-story-card'), 'Must include hero featured card');
-  assert.ok(html.includes('stories-grid'), 'Must include stories grid');
-  assert.ok(html.includes('search-modal-backdrop'), 'Must include search modal');
+  assert.ok(html.includes('posts-timeline'), 'Must include chronological posts timeline');
+
+  const filterMatches = [...html.matchAll(/data-filter="([^"]+)"/g)].map((m) => m[1]);
+  assert.deepStrictEqual(
+    filterMatches,
+    ['Personal', 'Tech', 'Entrepreneurship'],
+    `Expected exact 3 filters Personal, Tech, Entrepreneurship, got: ${filterMatches.join(', ')}`
+  );
+
+  assert.ok(!html.includes('search-modal'), 'Search modal must be removed');
+  assert.ok(!html.includes('theme-toggle-btn'), 'Theme toggle button must be removed');
+  assert.ok(!html.includes('hero-story-card'), 'Featured hero override must be removed');
 });
 
-it('should generate pre-rendered pages for every post with dual language containers', () => {
+it('should generate pre-rendered pages for every post with dual language containers and zero clutter', () => {
   const posts = loadAllPosts();
   posts.forEach((post) => {
     const postHtmlPath = path.join(__dirname, 'dist/posts', post.slug, 'index.html');
@@ -79,31 +102,12 @@ it('should generate pre-rendered pages for every post with dual language contain
     const html = fs.readFileSync(postHtmlPath, 'utf8');
     assert.ok(html.includes('id="post-content-en"'), `Post ${post.slug} missing #post-content-en`);
     assert.ok(html.includes('id="post-content-zh"'), `Post ${post.slug} missing #post-content-zh`);
-    assert.ok(html.includes('article-lang-bar'), `Post ${post.slug} missing one-click language bar`);
     assert.ok(html.includes('data-lang-btn="en"'), `Post ${post.slug} missing EN switch button`);
     assert.ok(html.includes('data-lang-btn="zh"'), `Post ${post.slug} missing ZH switch button`);
-    assert.ok(html.includes('post-title'), `Post ${post.slug} missing #post-title`);
-  });
-});
-
-it('should render macOS styled code blocks with traffic light controls', () => {
-  const postHtmlPath = path.join(__dirname, 'dist/posts/introducing-vahram-blog/index.html');
-  const html = fs.readFileSync(postHtmlPath, 'utf8');
-  assert.ok(html.includes('class="code-block"'), 'Must include .code-block');
-  assert.ok(html.includes('class="code-dot red"'), 'Must include red dot');
-  assert.ok(html.includes('class="copy-code-btn"'), 'Must include copy code button');
-});
-
-it('should generate valid search API index in dist/api/posts.json', () => {
-  const searchJsonPath = path.join(__dirname, 'dist/api/posts.json');
-  assert.ok(fs.existsSync(searchJsonPath));
-  const data = JSON.parse(fs.readFileSync(searchJsonPath, 'utf8'));
-  assert.ok(Array.isArray(data));
-  assert.ok(data.length >= 4);
-  data.forEach((item) => {
-    assert.ok(item.slug);
-    assert.ok(item.title);
-    assert.ok(item.title_zh);
+    assert.ok(html.includes('id="post-title"'), `Post ${post.slug} missing #post-title`);
+    assert.ok(!html.includes('copy-article-link-btn'), 'Share link button must be removed');
+    assert.ok(!html.includes('Post on X'), 'Social share clutter must be removed');
+    assert.ok(!html.includes('Edit on GitHub'), 'Edit on GitHub button must be removed');
   });
 });
 
@@ -119,7 +123,7 @@ it('should generate RSS 2.0 and Sitemap XML feeds', () => {
 
   const sitemapContent = fs.readFileSync(sitemapPath, 'utf8');
   assert.ok(sitemapContent.includes('<urlset'), 'Invalid Sitemap header');
-  assert.ok(sitemapContent.includes('<loc>https://vahram.pages.dev/'), 'Sitemap missing root URL');
+  assert.ok(!sitemapContent.includes('/about/'), 'Sitemap must not include removed /about/ route');
 });
 
 it('should generate Cloudflare Pages configuration files (_headers, _redirects, wrangler.toml)', () => {
@@ -132,17 +136,15 @@ it('should generate Cloudflare Pages configuration files (_headers, _redirects, 
   assert.ok(wranglerContent.includes('pages_build_output_dir = "dist"'), 'wrangler.toml must output to dist');
 });
 
-it('should verify client-side script (app.js) contains one-click switcher logic', () => {
+it('should verify client-side script (app.js) contains one-click switcher and 3-filter toggle logic', () => {
   const jsPath = path.join(__dirname, 'dist/assets/js/app.js');
   assert.ok(fs.existsSync(jsPath));
   const js = fs.readFileSync(jsPath, 'utf8');
   assert.ok(js.includes('switchLanguage'), 'app.js must contain switchLanguage');
   assert.ok(js.includes('vahram_lang'), 'app.js must persist language to localStorage');
-  assert.ok(js.includes('vahram_theme'), 'app.js must persist theme to localStorage');
-  assert.ok(js.includes('search-modal-backdrop'), 'app.js must handle Spotlight search modal');
+  assert.ok(js.includes('applyFilter'), 'app.js must contain category filter logic');
 });
 
-// Summary
 console.log(`\n📊 Test Results: ${passedTests}/${totalTests} passed.`);
 if (passedTests === totalTests) {
   console.log('🎉 All blog functionality and verification checks PASSED successfully!\n');
