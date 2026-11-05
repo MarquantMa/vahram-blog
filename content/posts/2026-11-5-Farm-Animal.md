@@ -6,7 +6,6 @@ category: "Personal" # Personal | Tech | Entrepreneurship
 ---
 
 <!-- lang:en -->
-Write your English post here. Supports Markdown, rich text, lists, quotes, tables, and images.
 
 Hebe Gu is a farm animal 
 
